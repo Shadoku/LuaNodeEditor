@@ -102,7 +102,21 @@ class NodeAttributeMultipleExpressionOut(NodeAttribute):
         if len(self.arguments) == 0:
             return
         last_arg = self.arguments.pop()
-        # TODO IMPORTANT check if attribute has connections and if so delete them
+        # Remove any links connected to this argument
+        links_to_remove = []
+        for link in globals.links:
+            if link.from_attribute == last_arg.id or link.to_attribute == last_arg.id:
+                links_to_remove.append(link)
+
+        for link in links_to_remove:
+            if dpg.does_item_exist(link.id):
+                dpg.delete_item(link.id)
+            globals.links.remove(link)
+
+        # Remove the attribute from the parent node list
+        if last_arg in self.parent_node.node_attributes:
+            self.parent_node.node_attributes.remove(last_arg)
+
         dpg.delete_item(last_arg.id)
 
     def generate_code(self, color_coded=False):
@@ -166,7 +180,23 @@ class NodeAttributeMultipleTableEntry(NodeAttribute):
         if len(self.entries) == 0:
             return
         last_arg = self.entries.pop()
-        # TODO IMPORTANT check if attribute has connections and if so delete them
+        # Remove any links connected to the name or value attributes
+        links_to_remove = []
+        for link in globals.links:
+            if link.from_attribute in (last_arg.name.id, last_arg.value.id) or \
+               link.to_attribute in (last_arg.name.id, last_arg.value.id):
+                links_to_remove.append(link)
+
+        for link in links_to_remove:
+            if dpg.does_item_exist(link.id):
+                dpg.delete_item(link.id)
+            globals.links.remove(link)
+
+        # Remove attributes from the parent node attribute list
+        for attr in (last_arg.name, last_arg.value):
+            if attr in self.parent_node.node_attributes:
+                self.parent_node.node_attributes.remove(attr)
+
         dpg.delete_item(last_arg.name.id)
         dpg.delete_item(last_arg.value.id)
 

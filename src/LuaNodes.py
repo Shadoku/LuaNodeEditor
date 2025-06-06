@@ -43,6 +43,12 @@ lua_ntIterateIPairs = 30
 lua_ntTable = 31
 lua_ntNot = 32
 lua_ntModulus = 33
+lua_ntPower = 34
+lua_ntFloorDivide = 35
+lua_ntUnaryMinus = 36
+lua_ntLength = 37
+lua_ntRepeatUntil = 38
+lua_ntBreak = 39
 
 lua_ntNames = {
     lua_ntStart: "Entry",
@@ -60,6 +66,10 @@ lua_ntNames = {
     lua_ntMultiply: "Multiply(*)",
     lua_ntDivide: "Divide(/)",
     lua_ntModulus: "Modulus(%)",
+    lua_ntPower: "Power(^)",
+    lua_ntFloorDivide: "Floor Divide(//)",
+    lua_ntUnaryMinus: "Unary Minus(-)",
+    lua_ntLength: "Length(#)",
     lua_ntGreater: "Greater(>)",
     lua_ntGreaterOrEqual: "Greater or equal(>=)",
     lua_ntLess: "Less(<)",
@@ -79,6 +89,8 @@ lua_ntNames = {
     lua_ntIndexTableByKey: "Index Table By Key",
     lua_ntIteratePairs: "Iterate Pairs",
     lua_ntIterateIPairs: "Iterate IPairs",
+    lua_ntRepeatUntil: "Repeat Until",
+    lua_ntBreak: "Break",
 
 }
 
@@ -153,6 +165,18 @@ def create_node_of_type(type):
         node = LuaNodeNot()
     elif type == lua_ntModulus:
         node = LuaNodeModulus()
+    elif type == lua_ntPower:
+        node = LuaNodePower()
+    elif type == lua_ntFloorDivide:
+        node = LuaNodeFloorDivide()
+    elif type == lua_ntUnaryMinus:
+        node = LuaNodeUnaryMinus()
+    elif type == lua_ntLength:
+        node = LuaNodeLength()
+    elif type == lua_ntRepeatUntil:
+        node = LuaNodeRepeatUntil()
+    elif type == lua_ntBreak:
+        node = LuaNodeBreak()
 
     dpg.bind_item_font(node.id, "bold_roboto")
     return node
@@ -541,6 +565,56 @@ class LuaNodeWhileLoop(LuaNode):
                 ["\n"]
             ] + execute_out_code_colored
 
+
+class LuaNodeRepeatUntil(LuaNode):
+    def __init__(self):
+        super().__init__()
+        self.node_type = lua_ntRepeatUntil
+
+        self.node_attributes = [
+            NodeAttributeExecuteIn(),
+            NodeAttributeExecuteOut(),
+            NodeAttributeExecuteOut("Execute"),
+            NodeAttributeExpressionIn("Condition"),
+        ]
+
+        self.attribute_execute_out = self.node_attributes[1]
+        self.attribute_code_to_execute = self.node_attributes[2]
+        self.attribute_condition_expression = self.node_attributes[3]
+
+        with dpg.stage() as self.stage:
+            with dpg.node(label="Repeat Until") as self.id:
+                pass
+
+    def generate_code(self, color_coded=False):
+        inc_ind()
+        execute_code = f"{self.attribute_code_to_execute.generate_code()}"
+        dec_ind()
+
+        condition_code = self.attribute_condition_expression.generate_code()
+        execute_out_code = self.attribute_execute_out.generate_code()
+
+        if not color_coded:
+            return f"{ind()}repeat\n{execute_code}{ind()}until {condition_code}\n{execute_out_code}"
+        else:
+            inc_ind()
+            execute_code_colored = self.attribute_code_to_execute.generate_code(color_coded=True)
+            dec_ind()
+
+            condition_code_colored = self.attribute_condition_expression.generate_code(color_coded=True)
+            execute_out_code_colored = self.attribute_execute_out.generate_code(color_coded=True)
+
+            return [
+                [ind()],
+                ["repeat", color_keyword],
+                ["\n"]
+            ] + execute_code_colored + [
+                [ind()],
+                ["until ", color_keyword]
+            ] + condition_code_colored + [
+                ["\n"]
+            ] + execute_out_code_colored
+
 class LuaIfNode(LuaNode):
     def __init__(self):
         super().__init__()
@@ -732,6 +806,46 @@ class LuaNodeBinaryCombiner(LuaNode):
         # return self.attribute_expression.generate_code()
 
 
+class LuaNodeUnaryOperator(LuaNode):
+    def __init__(self, name, symbol, postfix=False):
+        super().__init__()
+        self.symbol = symbol
+        self.postfix = postfix
+
+        self.node_attributes = [
+            NodeAttributeExpressionIn("a"),
+            NodeAttributeCheckbox("Paranthesize"),
+            NodeAttributeExpressionOut("Value")
+        ]
+
+        self.node_attribute_expression_in_a = self.node_attributes[0]
+        self.checkbox_attribute = self.node_attributes[1]
+
+        with dpg.stage() as self.stage:
+            with dpg.node(label=name) as self.id:
+                pass
+
+    def generate_code(self, color_coded=False):
+        check = dpg.get_value(self.checkbox_attribute.checkbox)
+        expr = self.node_attribute_expression_in_a.generate_code(color_coded=color_coded)
+
+        if not color_coded:
+            inner = f"({expr})" if check else expr
+            return f"{self.symbol}{inner}" if not self.postfix else f"{inner}{self.symbol}"
+        else:
+            result = []
+            if check:
+                result += [["(", color_default]]
+            if not self.postfix:
+                result += [[self.symbol, color_math_operator]]
+            result += expr
+            if self.postfix:
+                result += [[self.symbol, color_math_operator]]
+            if check:
+                result += [[")", color_default]]
+            return result
+
+
 class LuaNodeAdd(LuaNodeBinaryCombiner):
     def __init__(self):
         super().__init__("Add", " + ")
@@ -759,6 +873,30 @@ class LuaNodeModulus(LuaNodeBinaryCombiner):
     def __init__(self):
         super().__init__("Modulus", " % ")
         self.node_type = lua_ntModulus
+
+
+class LuaNodePower(LuaNodeBinaryCombiner):
+    def __init__(self):
+        super().__init__("Power", " ^ ")
+        self.node_type = lua_ntPower
+
+
+class LuaNodeFloorDivide(LuaNodeBinaryCombiner):
+    def __init__(self):
+        super().__init__("Floor Divide", " // ")
+        self.node_type = lua_ntFloorDivide
+
+
+class LuaNodeUnaryMinus(LuaNodeUnaryOperator):
+    def __init__(self):
+        super().__init__("Unary Minus", " - ")
+        self.node_type = lua_ntUnaryMinus
+
+
+class LuaNodeLength(LuaNodeUnaryOperator):
+    def __init__(self):
+        super().__init__("Length", " # ")
+        self.node_type = lua_ntLength
 
 
 class LuaNodeGreater(LuaNodeBinaryCombiner):
@@ -1063,6 +1201,30 @@ class LuaNodeReturn(LuaNode):
                 [ind()],
                 ["return ", color_keyword]
             ] + my_code_colored + [
+                ["\n"]
+            ]
+
+
+class LuaNodeBreak(LuaNode):
+    def __init__(self):
+        super().__init__()
+        self.node_type = lua_ntBreak
+
+        self.node_attributes = [
+            NodeAttributeExecuteIn()
+        ]
+
+        with dpg.stage() as self.stage:
+            with dpg.node(label="Break") as self.id:
+                pass
+
+    def generate_code(self, color_coded=False):
+        if not color_coded:
+            return f"{ind()}break\n"
+        else:
+            return [
+                [ind()],
+                ["break", color_keyword],
                 ["\n"]
             ]
 
