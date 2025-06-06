@@ -529,7 +529,9 @@ if __name__ == "__main__":
             dpg.hide_item("node_library")
 
     def file_dialog_cancel_callback(sender, app_data):
-        pass
+        # Hide the dialog when the user cancels
+        if dpg.does_item_exist(sender):
+            dpg.hide_item(sender)
 
     def on_drop(s, a):
         create_node(a)
